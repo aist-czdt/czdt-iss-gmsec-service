@@ -11,12 +11,14 @@ class GmsecProduct:
     PRODUCT_TOPIC = "ESDT.CZDT.ISS.MSG.PROD.PRODUCT-INGEST"
 
     def __init__(
-        self, collection: str, ogc: str, uris: Iterable[str], gmsec: GmsecConnection
+        self, job_id: str, collection: str, provenance: str, ogc: str, uris: Iterable[str], gmsec: GmsecConnection
     ):
         self.gmsec = gmsec
         self.collection = collection
         self.ogc = ogc
         self.URIs = uris
+        self.job_id = job_id
+        self.provenance = provenance
 
     def _construct_product_message(self) -> lp.Message:
         gmsec_msg: lp.Message = self.gmsec.msg_factory.create_message("MSG.PROD")
@@ -25,6 +27,8 @@ class GmsecProduct:
         gmsec_msg.add_field(lp.F32Field("CONTENT-VERSION", 2024))
         gmsec_msg.add_field(lp.StringField("PROD-NAME", self.collection))
         gmsec_msg.add_field(lp.StringField("PROD-DESCRIPTION", self.ogc))
+        gmsec_msg.add_field(lp.StringField("JOB-ID", self.job_id))
+        gmsec_msg.add_field(lp.StringField("PROVENANCE", self.provenance))
         gmsec_msg.add_field(lp.U16Field("NUM-OF-FILES", len(self.URIs)))
 
         for i, uri in enumerate(self.URIs, 1):
@@ -61,9 +65,7 @@ class GmsecLog:
     def _convert_level_severity(self, level: str) -> int:
         """Converts log level to int value ranging 0-4"""
         if level not in self.LEVEL_SEVERITY_MAP.keys():
-            raise ValueError(
-                f"Invalid log level. Must be one of {', '.join(self.LEVEL_SEVERITY_MAP.keys())}"
-            )
+            raise ValueError(f"Invalid log level. Must be one of {', '.join(self.LEVEL_SEVERITY_MAP.keys())}")
         return self.LEVEL_SEVERITY_MAP[level]
 
     def _construct_log_message(self) -> lp.Message:
