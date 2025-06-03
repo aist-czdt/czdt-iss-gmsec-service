@@ -28,11 +28,15 @@ def test_log_request_invalid_level():
 
 def test_product_request_valid():
     product = ProductRequest(
+        job_id="1234-abcd",
         collection="collection-abc",
+        provenance="source:dummy,parameter:dummy",
         ogc="ogc-id",
         uris=["s3://bucket/file1.txt", "s3://another-bucket/data/file2.csv"],
     )
+    assert product.job_id == "1234-abcd"
     assert product.collection == "collection-abc"
+    assert product.provenance == "source:dummy,parameter:dummy"
     assert product.uris[0].startswith("s3://")
 
 
