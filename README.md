@@ -46,7 +46,7 @@ publishing `LOG` messages, and `/product` for `PROD` messages.
 ```
 {
     "collection":"MUR25-JPL-L4-GLOB-v04.2",
-    "ogc":"http://35.86.216.193:8888/stac/collections/gpw_v4/items", 
+    "ogc":"http://titiler.url/stac/collections/gpw_v4/items", 
     "uris": [
         "s3://czdt-sdap-ard-zarr/gpw_v4/src/file1.zarr", 
         "s3://czdt-sdap-ard-zarr/gpw_v4/src/file2.zarr"
