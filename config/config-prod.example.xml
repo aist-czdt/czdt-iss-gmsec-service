@@ -1,0 +1,38 @@
+<!-- Sample config-prod with dummy url values -->
+<?xml version="1.0" encoding="UTF-8"?>
+<DEFINITIONS>
+    <CONFIG NAME="config">
+        <!-- Middleware -->
+        <PARAMETER NAME="mw-id">activemq395</PARAMETER>
+        <PARAMETER NAME="server">server-url</PARAMETER>
+        <PARAMETER NAME="mw-truststore">/app/auth/truststore.pem</PARAMETER>
+        <PARAMETER NAME="mw-truststore-password">password</PARAMETER>
+        <!-- Message Validation -->
+        <PARAMETER NAME="gmsec-msg-content-validate-recv">false</PARAMETER>
+        <!-- Message Spec -->
+        <PARAMETER NAME="gmsec-specification-version">202400</PARAMETER>
+        <PARAMETER NAME="gmsec-schema-path">/app/message-spec/templates</PARAMETER>
+        <PARAMETER NAME="gmsec-schema-level">0</PARAMETER>
+        <!-- Heartbeat Generator -->
+        <PARAMETER NAME="heartbeat-pub-rate">30</PARAMETER>
+        <!-- Log Level -->
+        <PARAMETER NAME="loglevel">info</PARAMETER>
+        <!-- ISS Components-->
+        <PARAMETER NAME="sdap-hb-url">http://sdap-hb-url</PARAMETER>
+        <PARAMETER NAME="titiler-hb-url">http://titiler-hb-url</PARAMETER>
+        <PARAMETER NAME="hysds-hb-url">http://hysds-hb-url</PARAMETER>
+    </CONFIG>
+
+    <SUBSCRIPTION NAME="SUBSCRIBE-ASYNC-SUBSCRIPTION" PATTERN="*.>">
+        <EXCLUDE PATTERN="*.*.*.MSG.HB.>"/>
+    </SUBSCRIPTION>
+
+    <SUBSCRIPTION NAME="CMSS-REQUESTS-SUBSCRIPTION" PATTERN="ESDT.CZDT.CMSS.REQ.DIR.PRODUCT-INGEST.*">
+        <EXCLUDE PATTERN="*.*.*.MSG.HB.>"/>
+    </SUBSCRIPTION>
+
+    <SUBSCRIPTION NAME="PRODUCT-INGEST-SUBSCRIPTION" PATTERN="ESDT.CZDT.*.MSG.PROD.>">
+        <EXCLUDE PATTERN="*.*.*.MSG.HB.>"/>
+    </SUBSCRIPTION>
+    
+</DEFINITIONS>

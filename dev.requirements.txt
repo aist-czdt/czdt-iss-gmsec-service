@@ -1,0 +1,8 @@
+fastapi
+httpx
+maap_py
+pydantic
+pytest
+python-dotenv
+requests
+uvicorn

@@ -1,0 +1,10 @@
+.vscode
+.ruff_cache
+__pycache__
+.DS_Store
+.venv
+.pytest_cache
+
+.env
+truststore.pem
+config-prod.xml

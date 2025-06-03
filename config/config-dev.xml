@@ -1,0 +1,27 @@
+
+<?xml version="1.0" encoding="UTF-8"?>
+<DEFINITIONS>
+    <CONFIG NAME="config">
+        <!-- Middleware -->
+        <PARAMETER NAME="mw-id">bolt</PARAMETER>
+        <PARAMETER NAME="server">localhost</PARAMETER>
+        <!-- Message Validation -->
+        <PARAMETER NAME="gmsec-msg-content-validate-recv">false</PARAMETER>
+        <!-- Message Spec -->
+        <PARAMETER NAME="gmsec-specification-version">202400</PARAMETER>
+        <PARAMETER NAME="gmsec-schema-path">/app/message-spec/templates</PARAMETER>
+        <PARAMETER NAME="gmsec-schema-level">0</PARAMETER>
+        <!-- Heartbeat Generator -->
+        <PARAMETER NAME="heartbeat-pub-rate">5</PARAMETER>
+        <!-- Log Level -->
+        <PARAMETER NAME="loglevel">info</PARAMETER>
+    </CONFIG>
+
+    <SUBSCRIPTION NAME="SUBSCRIBE-ASYNC-SUBSCRIPTION" PATTERN="*.>">
+        <EXCLUDE PATTERN="*.*.*.MSG.HB.>"/>
+    </SUBSCRIPTION>
+
+    <SUBSCRIPTION NAME="PRODUCT-INGEST-SUBSCRIPTION" PATTERN="ESDT.CZDT.*.MSG.PROD.>">
+    </SUBSCRIPTION>
+    
+</DEFINITIONS>

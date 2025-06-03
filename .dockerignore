@@ -1,0 +1,5 @@
+tests
+.venv
+.vscode
+.ruff*
+.pytest*

@@ -1,0 +1,47 @@
+x-defaults: &default
+  restart: always
+  volumes:
+    - ../message-spec:/app/message-spec
+
+networks:
+  default:
+    name: iss_net
+
+services:
+
+  # Service for publishing heartbeat message. Unrelated to API
+  iss.hb:
+    build: .
+    image: czdt/iss
+    container_name: iss_hb
+    <<: *default
+    command: python3 gmsec_service/services/heartbeat.py
+
+  # Service for listening for new messages. Unrelated to API
+  iss.listener:
+    image: czdt/iss
+    container_name: iss_listener
+    <<: *default
+    command: python3 gmsec_service/services/listener.py
+    env_file:
+      - auth/.env
+
+  # Service for serving API (FastAPI Gateway)
+  iss.api:
+    build:
+      context: ./api          # Path to the new API directory
+    image: czdt/api
+    container_name: iss_api
+    restart: always
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
+    ports:
+      - "8000:8000"
+
+  # Service for receiving API requests and handling GMSEC logic
+  iss.publisher:
+    image: czdt/iss
+    container_name: iss_publisher
+    <<: *default
+    command: uvicorn gmsec_service.api.publisher_api:app --host 0.0.0.0 --port 9000
+    ports:
+      - "9000:9000"
