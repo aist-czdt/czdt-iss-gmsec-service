@@ -21,14 +21,14 @@ class LogRequest(BaseModel):
     def validate_level(cls, v: str) -> str:
         allowed_levels = GmsecLog.LEVEL_SEVERITY_MAP.keys()
         if v.upper() not in allowed_levels:
-            raise ValueError(
-                f"Invalid log level '{v}'. Must be one of: {', '.join(allowed_levels)}"
-            )
+            raise ValueError(f"Invalid log level '{v}'. Must be one of: {', '.join(allowed_levels)}")
         return v.upper()
 
 
 class ProductRequest(BaseModel):
+    job_id: NonEmptyStr
     collection: NonEmptyStr
+    provenance: NonEmptyStr
     ogc: NonEmptyStr
     uris: List[NonEmptyStr]
 
@@ -61,18 +61,16 @@ def get_gmsec_connection() -> GmsecConnection:
 
 
 @app.post("/product")
-def publish_product(
-    product: ProductRequest, gmsec: GmsecConnection = Depends(get_gmsec_connection)
-):
-    gmsec_product = GmsecProduct(product.collection, product.ogc, product.uris, gmsec)
+def publish_product(product: ProductRequest, gmsec: GmsecConnection = Depends(get_gmsec_connection)):
+    gmsec_product = GmsecProduct(
+        product.job_id, product.collection, product.provenance, product.ogc, product.uris, gmsec
+    )
     publish_status = gmsec_product.publish_product()
     return {"status": publish_status}
 
 
 @app.post("/log")
-def log_message(
-    log: LogRequest, gmsec: GmsecConnection = Depends(get_gmsec_connection)
-):
+def log_message(log: LogRequest, gmsec: GmsecConnection = Depends(get_gmsec_connection)):
     gmsec_log = GmsecLog(log.level, log.msg_body, gmsec)
     publish_status = gmsec_log.publish_log()
     return {"status": publish_status}
