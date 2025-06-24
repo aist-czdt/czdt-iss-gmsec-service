@@ -5,7 +5,8 @@ import libgmsec_python3 as lp
 
 class GmsecProduct:
     """
-    Class for publishing LOG or PRODUCT messages
+    Class for publishing PRODUCT messages
+    https://www.czdt.smce.nasa.gov/message-spec/message-definitions/msg-prod.html#
     """
 
     PRODUCT_TOPIC = "ESDT.CZDT.ISS.MSG.PROD.PRODUCT-INGEST"
@@ -47,6 +48,11 @@ class GmsecProduct:
 
 
 class GmsecLog:
+    """
+    Class for publishing LOG messages
+    https://www.czdt.smce.nasa.gov/message-spec/message-definitions/msg-log.html
+    """
+    
     LEVEL_SEVERITY_MAP = {
         "DEBUG": 0,
         "INFO": 1,
