@@ -20,13 +20,18 @@ def maap_client():
 
 
 def test_job_submission(maap_client: MAAP):
+    collection_id = "C1276812838-GES_DISC"
+    granule_id = "M2T1NXFLX.5.12.4:MERRA2_400.tavg1_2d_flx_Nx.20250401.nc4"
+    file_uri="s3://czdt-iass/output_data/e8d1db62-2283-4f83-8589-ae0f8e967bd2/impacted_population.zarr",
+    
     job: DPSJob = maap_client.submitJob(
-        identifier="merra2-test",
+        identifier="gmsec-directive-ingest",
         algo_id="czdt-iss-ingest",
         version="main",
         queue="maap-dps-czdt-worker-8gb",
-        granule_id="M2T1NXFLX.5.12.4:MERRA2_400.tavg1_2d_flx_Nx.20250401.nc4",
-        collection_id="C1276812838-GES_DISC",
+        file_uri=file_uri,
+        granule_id=granule_id,
+        collection_id=collection_id,
         s3_bucket="czdt-hysds-dataset",
         s3_prefix="ingest",
         role_arn="arn:aws:iam::011528287727:role/czdt-hysds-verdi-role",
