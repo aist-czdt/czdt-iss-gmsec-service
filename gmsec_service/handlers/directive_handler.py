@@ -65,7 +65,13 @@ class GmsecSubmitJob(GmsecRequestHandler):
     def get_ingest_params(self) -> dict:
         ingest_params = {}
         return ingest_params
-
+    
+    def get_ingest_concept_id(self) -> str:
+        concept_id = self.directive_string_data.get("concept_id")
+        if not concept_id:
+            raise ValueError("Unable to extract 'products' from DIRECTIVE-STRING.")
+        return concept_id
+    
     def get_ingest_product_path(self) -> str:
         product_path = self.directive_string_data.get("products")
         if not product_path:
@@ -87,8 +93,11 @@ class GmsecSubmitJob(GmsecRequestHandler):
         Hit MAAP API to submit ingest job
         Returns a JobState instance containing job id and status
         """
+        concept_id = self.get_ingest_concept_id()
         product_path = self.get_ingest_product_path()
         product_type = self.get_ingest_product_type()
+        
+        lp.log_info(f"Submitting job for a {product_type} product at {product_path} with conecpt_id {concept_id}")
         
         try:
             job: DPSJob = self.maap.submitJob(
@@ -97,12 +106,14 @@ class GmsecSubmitJob(GmsecRequestHandler):
                 version="main",
                 queue="maap-dps-czdt-worker-8gb",
                 file_uri=product_path,
+                collection_id=concept_id,
                 s3_bucket="czdt-hysds-dataset",
                 s3_prefix="ingest",
                 role_arn="arn:aws:iam::011528287727:role/czdt-hysds-verdi-role",
             )
-
-            return JobState.from_maap_status(job.status, job.id)
         except Exception as e:
             lp.log_error(f"Unable to submit job {e}")
             raise
+        
+        job_state = JobState.from_maap_status(job.status, job.id)
+        return job_state
