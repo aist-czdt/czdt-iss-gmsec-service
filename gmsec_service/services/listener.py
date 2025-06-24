@@ -5,7 +5,7 @@ import libgmsec_python3 as lp
 from gmsec_service.common.connection import GmsecConnection
 from gmsec_service.common.job import JobState
 from gmsec_service.handlers.directive_handler import GmsecJobStatus, GmsecSubmitJob
-from gmsec_service.services.publisher import GmsecLog, GmsecProduct
+from gmsec_service.services.publisher import GmsecLog
 
 
 class GmsecListener:
@@ -19,9 +19,7 @@ class GmsecListener:
 
         self.gmsec = GmsecConnection(config)
 
-        self.subscription_pattern = self.gmsec.get_subscription_pattern(
-            self.subscription_name
-        )
+        self.subscription_pattern = self.gmsec.get_subscription_pattern(self.subscription_name)
 
     def handle_request(self, request_msg: lp.Message):
         try:
@@ -41,15 +39,6 @@ class GmsecListener:
                 try:
                     job_id = request_handler.get_job_id()
                     job_status = request_handler.get_job_status(job_id)
-
-                    if job_status.status_label.lower() == "COMPLETED":
-                        # Emit PROD message
-                        collection = "iass_impacted_population"
-                        ogc = "http://35.86.216.193:8888/stac/collections/iass_impacted_population/items"
-                        uris = [""]
-                        gmsec_product = GmsecProduct(collection, ogc, uris, self.gmsec)
-                        publish_status = gmsec_product.publish_product()
-                        lp.log_info()
                 except Exception as e:
                     logging.exception(e)
 
@@ -63,14 +52,10 @@ class GmsecListener:
             else:
                 raise ValueError(f"Unsupported DIRECTIVE-KEYWORD: {directive_keyword}")
 
-            lp.log_info(
-                f"Constructing Reply: job_id {job_status.job_id} job_status {job_status.status_label}"
-            )
+            lp.log_info(f"Constructing Reply: job_id {job_status.job_id} job_status {job_status.status_label}")
 
             # Construct a response
-            response_msg = self.build_response(
-                job_status, request_msg.get_field("REQUEST-ID")
-            )
+            response_msg = self.build_response(job_status, request_msg.get_field("REQUEST-ID"))
 
             lp.log_info("Sending Response:\n" + response_msg.to_xml())
 
@@ -81,9 +66,7 @@ class GmsecListener:
         finally:
             lp.Message.destroy(request_msg)
 
-    def build_response(
-        self, job_status: JobState, request_id_field: lp.Field
-    ) -> lp.Message:
+    def build_response(self, job_status: JobState, request_id_field: lp.Field) -> lp.Message:
         """
         Builds response message from JobState object along with request message's id Field object
         """
@@ -96,16 +79,12 @@ class GmsecListener:
         response_msg.add_field(request_id_field)
         response_msg.add_field(lp.I16Field("RESPONSE-STATUS", job_status.status_code))
         response_msg.add_field(lp.StringField("DATA-STRING", json.dumps(response_data)))
-        response_msg.add_field(
-            lp.StringField("DESTINATION-COMPONENT", "PRODUCT-MONITOR", True)
-        )
+        response_msg.add_field(lp.StringField("DESTINATION-COMPONENT", "PRODUCT-MONITOR", True))
         return response_msg
 
     def run(self):
         try:
-            log_msg = (
-                "GMSEC listener initialized. Waiting to receive directive requests."
-            )
+            log_msg = "GMSEC listener initialized. Waiting to receive directive requests."
             log_publisher = GmsecLog("INFO", log_msg, self.gmsec)
             log_publisher.publish_log()
 
