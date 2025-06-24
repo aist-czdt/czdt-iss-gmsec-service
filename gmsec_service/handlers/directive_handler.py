@@ -67,10 +67,20 @@ class GmsecSubmitJob(GmsecRequestHandler):
         return ingest_params
 
     def get_ingest_product_path(self) -> str:
-        product_path = self.directive_string_data.get("product")
+        product_path = self.directive_string_data.get("products")
         if not product_path:
-            raise ValueError("Unable to extract 'product' from DIRECTIVE-STRING.")
-        return product_path
+            raise ValueError("Unable to extract 'products' from DIRECTIVE-STRING.")
+        if len(product_path) > 1:
+            raise ValueError(f"Expected 1 product path exctracted from DIRECTIVE-STRING, found {len(product_path)}")
+        return product_path[0]
+    
+    def get_ingest_product_type(self) ->str:
+        # TODO: directive string will contain a "format" field which will dictate
+        # which ingest workflow to use
+        product_format = self.directive_string_data.get("format")
+        if not product_format:
+            raise ValueError("Unable to extract 'format' from DIRECTIVE-STRING.")
+        return product_format
 
     def trigger_ingest(self) -> JobState:
         """
@@ -78,12 +88,8 @@ class GmsecSubmitJob(GmsecRequestHandler):
         Returns a JobState instance containing job id and status
         """
         product_path = self.get_ingest_product_path()
-
-        if "zarr" in product_path:
-            pass
-        elif "gpkg" in product_path:
-            pass
-
+        product_type = self.get_ingest_product_type()
+        
         try:
             job: DPSJob = self.maap.submitJob(
                 identifier="gmsec-directive-ingest",
