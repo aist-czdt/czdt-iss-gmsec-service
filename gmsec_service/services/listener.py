@@ -1,6 +1,7 @@
 import json
 import logging
 import time
+import html
 import libgmsec_python3 as lp
 from gmsec_service.common.connection import GmsecConnection
 from gmsec_service.common.job import JobState
@@ -32,7 +33,8 @@ class GmsecListener:
                     raise ValueError(f"Missing required field {field}")
 
             directive_keyword = request_msg.get_string_value("DIRECTIVE-KEYWORD")
-            directive_string = request_msg.get_string_value("DIRECTIVE-STRING")
+            raw_directive_string = request_msg.get_string_value("DIRECTIVE-STRING")
+            directive_string = html.unescape(raw_directive_string)
 
             if directive_keyword == "JOB-STATUS":
                 request_handler = GmsecJobStatus(directive_keyword, directive_string)
@@ -101,7 +103,7 @@ class GmsecListener:
                     if request_msg is not None:
                         self.handle_request(request_msg)
 
-                    time.sleep(1)
+                    time.sleep(.5)
                 except KeyboardInterrupt:
                     print("\nCtrl+C was pressed. Exiting...")
                     break

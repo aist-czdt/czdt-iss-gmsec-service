@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y \
     libapr1 \
     libqpid-proton-cpp12 \
     vim \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 RUN update-alternatives --install /usr/bin/python3 python3 /usr/bin/python3.9 1
@@ -32,10 +33,9 @@ RUN curl -L -o ${GMSEC_TARBALL} https://github.com/nasa/GMSEC_API/releases/downl
 # http://www.apache.org/dyn/closer.lua/activemq/activemq-cpp/3.9.5/activemq-cpp-library-3.9.5-src.tar.gz
 ARG ACTIVEMQ_CPP_VERSION=3.9.5
 ARG ACTIVEMQ_CPP="activemq-cpp-${ACTIVEMQ_CPP_VERSION}"
-ARG ACTIVEMQ_CPP_TARBALL="${ACTIVEMQ_CPP}-src.tar.gz"
-RUN curl -L -o ${ACTIVEMQ_CPP_TARBALL} http://archive.apache.org/dist/activemq/activemq-cpp/${ACTIVEMQ_CPP_VERSION}/${ACTIVEMQ_CPP_TARBALL} \
-    && tar -xvzf ${ACTIVEMQ_CPP_TARBALL} \
-    && rm ${ACTIVEMQ_CPP_TARBALL}
+ARG ACTIVEMQ_CPP_TARBALL="${ACTIVEMQ_CPP}.tar.gz"
+COPY ${ACTIVEMQ_CPP_TARBALL} .
+RUN tar -xvzf ${ACTIVEMQ_CPP_TARBALL} && rm ${ACTIVEMQ_CPP_TARBALL}
 
 ENV GMSEC_HOME="/app/GMSEC_API"
 ENV ACTIVEMQ_CPP_HOME="/app/${ACTIVEMQ_CPP}"

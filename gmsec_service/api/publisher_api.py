@@ -1,4 +1,4 @@
-from typing import List, Optional, Annotated
+from typing import List, Optional, Annotated, Union
 from fastapi import FastAPI, Depends
 from contextlib import asynccontextmanager
 
@@ -28,8 +28,8 @@ class LogRequest(BaseModel):
 class ProductRequest(BaseModel):
     job_id: NonEmptyStr
     collection: NonEmptyStr
-    provenance: NonEmptyStr
-    ogc: NonEmptyStr
+    provenance: NonEmptyStr = "default"
+    ogc: Union[NonEmptyStr, List[NonEmptyStr]]
     uris: List[NonEmptyStr]
 
     @field_validator("uris")
@@ -41,6 +41,14 @@ class ProductRequest(BaseModel):
                 raise ValueError(f"Invalid URI: '{uri}'. Must start with 's3://'")
         return v
 
+    @field_validator("ogc", mode="before")
+    @classmethod
+    def normalize_ogc(cls, v):
+        if isinstance(v, list):
+            if not v:
+                raise ValueError("ogc list must not be empty")
+            return v[0]
+        return v
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
