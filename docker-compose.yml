@@ -14,6 +14,7 @@ services:
     build: .
     image: czdt/iss
     container_name: iss_hb
+    restart: always
     <<: *default
     command: python3 gmsec_service/services/heartbeat.py
 
@@ -21,6 +22,7 @@ services:
   iss.listener:
     image: czdt/iss
     container_name: iss_listener
+    restart: always
     <<: *default
     command: python3 gmsec_service/services/listener.py
     env_file:
@@ -41,6 +43,7 @@ services:
   iss.publisher:
     image: czdt/iss
     container_name: iss_publisher
+    restart: always
     <<: *default
     command: uvicorn gmsec_service.api.publisher_api:app --host 0.0.0.0 --port 9000
     ports:
