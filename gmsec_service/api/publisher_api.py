@@ -1,12 +1,15 @@
+import logging
+
 from typing import List, Optional, Annotated, Union
 from fastapi import FastAPI, Depends
 from contextlib import asynccontextmanager
 
-from pydantic import BaseModel, StringConstraints, field_validator
+from pydantic import BaseModel, StringConstraints, model_validator, field_validator, Field
 
 from gmsec_service.services.publisher import GmsecProduct, GmsecLog
 from gmsec_service.common.connection import GmsecConnection
 
+logger = logging.getLogger("publisher_api")
 
 gmsec_connection: Optional[GmsecConnection] = None
 
@@ -28,8 +31,8 @@ class LogRequest(BaseModel):
 class ProductRequest(BaseModel):
     job_id: NonEmptyStr
     collection: NonEmptyStr
-    provenance: NonEmptyStr = "default"
-    ogc: Union[NonEmptyStr, List[NonEmptyStr]]
+    provenance: NonEmptyStr = Field(default="default", description="Data provenance string")
+    ogc: NonEmptyStr = Field(..., description="OGC path (string or list; normalized to single string)")
     uris: List[NonEmptyStr]
 
     @field_validator("uris")
@@ -41,14 +44,24 @@ class ProductRequest(BaseModel):
                 raise ValueError(f"Invalid URI: '{uri}'. Must start with 's3://'")
         return v
 
-    @field_validator("ogc", mode="before")
+    @model_validator(mode="before")
     @classmethod
-    def normalize_ogc(cls, v):
-        if isinstance(v, list):
-            if not v:
+    def normalize_ogc(cls, data):
+        raw_ogc = data.get("ogc")
+
+        if raw_ogc is None:
+            raise ValueError("ogc field is required and cannot be null")
+
+        if isinstance(raw_ogc, list):
+            if not raw_ogc:
                 raise ValueError("ogc list must not be empty")
-            return v[0]
-        return v
+            raw_ogc = raw_ogc[0]
+        
+        if not isinstance(raw_ogc, str) or not raw_ogc.strip():
+            raise ValueError("ogc must be a non-empty string")
+
+        data["ogc"] = raw_ogc.strip()
+        return data
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -70,6 +83,7 @@ def get_gmsec_connection() -> GmsecConnection:
 
 @app.post("/product")
 def publish_product(product: ProductRequest, gmsec: GmsecConnection = Depends(get_gmsec_connection)):
+    logger.info(f"Received /product request: {product.json()}")
     gmsec_product = GmsecProduct(
         product.job_id, product.collection, product.provenance, product.ogc, product.uris, gmsec
     )
@@ -79,6 +93,7 @@ def publish_product(product: ProductRequest, gmsec: GmsecConnection = Depends(ge
 
 @app.post("/log")
 def log_message(log: LogRequest, gmsec: GmsecConnection = Depends(get_gmsec_connection)):
+    logger.info(f"Received /log request: {log.json()}")
     gmsec_log = GmsecLog(log.level, log.msg_body, gmsec)
     publish_status = gmsec_log.publish_log()
     return {"status": publish_status}
