@@ -32,7 +32,7 @@ class ProductRequest(BaseModel):
     job_id: NonEmptyStr
     collection: NonEmptyStr
     provenance: NonEmptyStr = Field(default="default", description="Data provenance string")
-    ogc: NonEmptyStr = Field(..., description="OGC path (string or list; normalized to single string)")
+    ogc: Optional[str] = Field(default=None, description="OGC path (string or list; normalized to single string or None)")
     uris: List[NonEmptyStr]
 
     @field_validator("uris")
@@ -47,21 +47,24 @@ class ProductRequest(BaseModel):
     @model_validator(mode="before")
     @classmethod
     def normalize_ogc(cls, data):
-        raw_ogc = data.get("ogc")
+        raw_ogc = data.get("ogc", None)
 
+        # Accept None or empty string; normalize to empty string if list or whitespace
         if raw_ogc is None:
-            raise ValueError("ogc field is required and cannot be null")
+            return data  # Leave ogc as None
 
         if isinstance(raw_ogc, list):
+            # Accept empty list → normalize to empty string
             if not raw_ogc:
-                raise ValueError("ogc list must not be empty")
+                data["ogc"] = ""
+                return data
             raw_ogc = raw_ogc[0]
-        
-        if not isinstance(raw_ogc, str) or not raw_ogc.strip():
-            raise ValueError("ogc must be a non-empty string")
 
-        data["ogc"] = raw_ogc.strip()
-        return data
+        if isinstance(raw_ogc, str):
+            data["ogc"] = raw_ogc.strip()
+            return data
+
+        raise ValueError("ogc must be a string, list of strings, or omitted")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
