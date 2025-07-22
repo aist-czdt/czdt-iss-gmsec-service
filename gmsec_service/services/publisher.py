@@ -1,6 +1,7 @@
 from typing import Iterable, Optional
 from gmsec_service.common.connection import GmsecConnection
 import libgmsec_python3 as lp
+import json
 
 
 class GmsecProduct:
@@ -19,19 +20,26 @@ class GmsecProduct:
         self.ogc = ogc
         self.URIs = uris
         self.job_id = job_id
-        self.provenance = provenance
+        self.provenance = json.dumps({"provenance": "default"})
 
     def _construct_product_message(self) -> lp.Message:
         gmsec_msg: lp.Message = self.gmsec.msg_factory.create_message("MSG.PROD")
         gmsec_msg.set_subject(self.PRODUCT_TOPIC)
 
         gmsec_msg.add_field(lp.F32Field("CONTENT-VERSION", 2024))
-        gmsec_msg.add_field(lp.StringField("PROD-NAME", self.collection))
+        
+        if "collection" in self.job_id:
+            gmsec_msg.add_field(lp.StringField("PROD-NAME", self.job_id))
+            gmsec_msg.add_field(lp.StringField("JOB-ID", self.collection))
+        else:
+            gmsec_msg.add_field(lp.StringField("PROD-NAME", self.collection))
+            gmsec_msg.add_field(lp.StringField("JOB-ID", self.job_id))
+            
         if self.ogc:
             gmsec_msg.add_field(lp.StringField("PROD-DESCRIPTION", self.ogc))
         else:
             gmsec_msg.add_field(lp.StringField("PROD-DESCRIPTION", " "))
-        gmsec_msg.add_field(lp.StringField("JOB-ID", self.job_id))
+            
         gmsec_msg.add_field(lp.StringField("PROVENANCE", self.provenance))
         gmsec_msg.add_field(lp.U16Field("NUM-OF-FILES", len(self.URIs)))
 
