@@ -51,7 +51,7 @@ class GmsecJobStatus(GmsecRequestHandler):
     def __init__(self, directive_keyword, directive_string):
         super().__init__(directive_keyword, directive_string)
 
-    def get_concept_id(self) -> str:
+    def get_job_id(self) -> str:
         """ """
         job_id = self.directive_string_data.get("job-id", "N/A")
         if job_id == "N/A":
@@ -78,7 +78,7 @@ class GmsecJobStatus(GmsecRequestHandler):
                 else:
                     return JobState.from_maap_status("failed", "N/A")
 
-            if maap_job_status.lower() != "deleted":
+            if maap_job_status and maap_job_status.lower() != "deleted":
                 break
 
             lp.log_warning(f"Attempt {attempt + 1}: Job {job_id} returned 'deleted'. Retrying after {2 ** attempt}s...")
@@ -141,41 +141,46 @@ class GmsecSubmitJob(GmsecRequestHandler):
             return JobState.from_maap_status("failed", "N/A")
         
         # Trigger ingest NOAA FTP
-        if any(["noaa" in v.lower() for v in string_data.values()]):
+        if any(
+            "noaa" in item.lower()
+            for v in self.directive_string_data.values()
+            if isinstance(v, str) or isinstance(v, list)
+            for item in (v if isinstance(v, list) else [v])
+        ):
             job_args = {
-                identifier: "ftp-ingest-021",
-                algo_id: "czdt-ftp-ingest",
-                version: "auto-create-collection",
-                queue: "maap-dps-czdt-worker-8gb",
-                ftp_server: "floodlight.ssec.wisc.edu",
-                area_of_interest: "021", # Chesapeake Bay area
-                s3_bucket: "czdt-hysds-dataset",
-                s3_prefix: "ingest",
-                role_arn: "arn:aws:iam::011528287727:role/czdt-hysds-verdi-role",
-                cmss_logger_host: "http://44.242.188.25:8000",
-                mmgis_host: "http://35.86.216.193:8888",
-                titiler_token_secret_name: "czdt_titiler_token",
-                overwrite_existing: "false"
+                "identifier": "ftp-ingest-021",
+                "algo_id": "czdt-ftp-ingest",
+                "version": "auto-create-collection",
+                "queue": "maap-dps-czdt-worker-8gb",
+                "ftp_server": "floodlight.ssec.wisc.edu",
+                "area_of_interest": "021", # Chesapeake Bay area
+                's3_bucket': "czdt-hysds-dataset",
+                "s3_prefix": "ingest",
+                "role_arn": "arn:aws:iam::011528287727:role/czdt-hysds-verdi-role",
+                "cmss_logger_host": "http://44.242.188.25:8000",
+                "mmgis_host": "http://35.86.216.193:8888",
+                "titiler_token_secret_name": "czdt_titiler_token",
+                "overwrite_existing": "false"
             }
             
         # Trigger normal product ingest
         else:
             job_args = {
-                identifier: "gmsec_ingest",
-                algo_id: "czdt-iss-product-ingest",
-                version: "auto-create-collection",
-                queue: "maap-dps-czdt-worker-8gb",
-                input_s3: product_path,
-                collection_id: concept_id,
-                s3_bucket: "czdt-hysds-dataset",
-                s3_prefix: "ingest",
-                role_arn: "arn:aws:iam::011528287727:role/czdt-hysds-verdi-role",
-                cmss_logger_host: "http://44.242.188.25:8000",
-                mmgis_host: "http://35.86.216.193:8888",
-                titiler_token_secret_name: "czdt_titiler_token",
-                job_queue: "maap-dps-czdt-worker-8gb",
-                zarr_config_url: "s3://maap-ops-workspace/rileykk/sample_lis_cfg.yaml",
-                maap_host: "api.maap-project.org"
+                "identifier": "gmsec_ingest",
+                "algo_id": "czdt-iss-product-ingest",
+                "version": "auto-create-collection",
+                "queue": "maap-dps-czdt-worker-8gb",
+                "input_s3": product_path,
+                "collection_id": concept_id,
+                "s3_bucket": "czdt-hysds-dataset",
+                "s3_prefix": "ingest",
+                "role_arn": "arn:aws:iam::011528287727:role/czdt-hysds-verdi-role",
+                "cmss_logger_host": "http://44.242.188.25:8000",
+                "mmgis_host": "http://35.86.216.193:8888",
+                "titiler_token_secret_name": "czdt_titiler_token",
+                "job_queue": "maap-dps-czdt-worker-8gb",
+                "zarr_config_url": "s3://maap-ops-workspace/rileykk/sample_lis_cfg.yaml",
+                "maap_host": "api.maap-project.org"
             }
         
             if ingest_variables:
