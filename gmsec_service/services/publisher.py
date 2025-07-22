@@ -1,4 +1,4 @@
-from typing import Iterable
+from typing import Iterable, Optional
 from gmsec_service.common.connection import GmsecConnection
 import libgmsec_python3 as lp
 
@@ -12,7 +12,7 @@ class GmsecProduct:
     PRODUCT_TOPIC = "ESDT.CZDT.ISS.MSG.PROD.PRODUCT-INGEST"
 
     def __init__(
-        self, job_id: str, collection: str, provenance: str, ogc: str, uris: Iterable[str], gmsec: GmsecConnection
+        self, job_id: str, collection: str, provenance: str, ogc: Optional[str], uris: Iterable[str], gmsec: GmsecConnection
     ):
         self.gmsec = gmsec
         self.collection = collection
@@ -27,7 +27,10 @@ class GmsecProduct:
 
         gmsec_msg.add_field(lp.F32Field("CONTENT-VERSION", 2024))
         gmsec_msg.add_field(lp.StringField("PROD-NAME", self.collection))
-        gmsec_msg.add_field(lp.StringField("PROD-DESCRIPTION", self.ogc))
+        if self.ogc:
+            gmsec_msg.add_field(lp.StringField("PROD-DESCRIPTION", self.ogc))
+        else:
+            gmsec_msg.add_field(lp.StringField("PROD-DESCRIPTION", " "))
         gmsec_msg.add_field(lp.StringField("JOB-ID", self.job_id))
         gmsec_msg.add_field(lp.StringField("PROVENANCE", self.provenance))
         gmsec_msg.add_field(lp.U16Field("NUM-OF-FILES", len(self.URIs)))
