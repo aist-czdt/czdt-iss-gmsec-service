@@ -6,7 +6,7 @@ import html
 import libgmsec_python3 as lp
 from gmsec_service.common.connection import GmsecConnection
 from gmsec_service.common.job import JobState
-from gmsec_service.handlers.directive_handler import GmsecJobStatus, GmsecSubmitJob
+from gmsec_service.handlers.directive_handler import GmsecRequestHandler
 from gmsec_service.services.publisher import GmsecLog
 
 
@@ -52,8 +52,9 @@ class GmsecListener:
             raw_directive_string = request_msg.get_string_value("DIRECTIVE-STRING")
             directive_string = html.unescape(raw_directive_string)
 
+            request_handler = GmsecRequestHandler(directive_keyword, directive_string)
+
             if directive_keyword == "JOB-STATUS":
-                request_handler = GmsecJobStatus(directive_keyword, directive_string)
                 try:
                     job_id = request_handler.get_job_id()
                     job_status = request_handler.get_job_status(job_id)
@@ -61,7 +62,6 @@ class GmsecListener:
                     logging.exception(e)
 
             elif directive_keyword == "SUBMIT-JOB":
-                request_handler = GmsecSubmitJob(directive_keyword, directive_string)
                 try:
                     job_status = request_handler.trigger_ingest()
                 except Exception as e:
@@ -69,11 +69,19 @@ class GmsecListener:
 
             else:
                 raise ValueError(f"Unsupported DIRECTIVE-KEYWORD: {directive_keyword}")
+            
+            # Ensure job is not a transient job failure before sending response
+            if job_status.status_label == "FAILED":
+                lp.log_info(f"Job {job_status.job_id} has FAILED status. Ensuring failure isn't transient before replying...")
+                time.sleep(2)
+                job_status = request_handler.get_job_status(job_status.job_id)
 
             lp.log_info(f"Constructing Reply: job_id {job_status.job_id} job_status {job_status.status_label}")
 
             # Construct a response
             response_msg = self.build_response(job_status, request_msg.get_field("REQUEST-ID"))
+            if request_msg.has_field("COMPONENT"):
+                response_msg.add_field(lp.StringField("DESTINATION-COMPONENT", request_msg.get_string_value("COMPONENT"),True))
 
             lp.log_info("Sending Response:\n" + response_msg.to_xml())
 
@@ -97,7 +105,6 @@ class GmsecListener:
         response_msg.add_field(request_id_field)
         response_msg.add_field(lp.I16Field("RESPONSE-STATUS", job_status.status_code))
         response_msg.add_field(lp.StringField("DATA-STRING", json.dumps(response_data)))
-        response_msg.add_field(lp.StringField("DESTINATION-COMPONENT", "PRODUCT-MONITOR", True))
         return response_msg
 
     def run(self):
