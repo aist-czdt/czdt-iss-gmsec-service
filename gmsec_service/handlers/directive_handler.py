@@ -33,7 +33,7 @@ maap = authenticate_maap()
 
 class GmsecRequestHandler:
     """
-    Parent class for containing GMSEC directive fields
+    Class for handling GMSEC directive requests and responses
     """
 
     def __init__(self, directive_keyword: str, directive_string: str):
@@ -45,12 +45,7 @@ class GmsecRequestHandler:
             raise ValueError(
                 "Unable to decode DIRECTIVE-STRING: not valid JSON."
             ) from e
-
-
-class GmsecJobStatus(GmsecRequestHandler):
-    def __init__(self, directive_keyword, directive_string):
-        super().__init__(directive_keyword, directive_string)
-
+            
     def get_job_id(self) -> str:
         """ """
         job_id = self.directive_string_data.get("job-id", "N/A")
@@ -91,15 +86,6 @@ class GmsecJobStatus(GmsecRequestHandler):
 
         lp.log_info(f"Obtained job status '{maap_job_status}' for job {job_id}")
         return JobState.from_maap_status(maap_job_status, job_id)
-
-
-class GmsecSubmitJob(GmsecRequestHandler):
-    def __init__(self, directive_keyword, directive_string):
-        super().__init__(directive_keyword, directive_string)
-
-    def get_ingest_params(self) -> dict:
-        ingest_params = {}
-        return ingest_params
     
     def get_ingest_concept_id(self) -> str:
         concept_id = self.directive_string_data.get("concept_id")
@@ -184,7 +170,7 @@ class GmsecSubmitJob(GmsecRequestHandler):
             }
         
             if ingest_variables:
-                job_args["variables"] = ingest_variables
+                job_args["variables"] = ",".join(ingest_variables)
         
         try:
             job: DPSJob = maap.submitJob(**job_args)
@@ -195,3 +181,4 @@ class GmsecSubmitJob(GmsecRequestHandler):
         if job.status == "success":
             return JobState.from_maap_status("accepted", job.id)
         return JobState.from_maap_status(job.status, job.id)
+
