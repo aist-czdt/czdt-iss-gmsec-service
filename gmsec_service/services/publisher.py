@@ -13,10 +13,10 @@ class GmsecProduct:
     PRODUCT_TOPIC = "ESDT.CZDT.ISS.MSG.PROD.PRODUCT-INGEST"
 
     def __init__(
-        self, job_id: str, collection: str, provenance: str, ogc: Optional[str], uris: Iterable[str], gmsec: GmsecConnection
+        self, job_id: str, concept_id: str, provenance: str, ogc: Optional[str], uris: Iterable[str], gmsec: GmsecConnection
     ):
         self.gmsec = gmsec
-        self.collection = collection
+        self.concept_id = concept_id
         self.ogc = ogc
         self.URIs = uris
         self.job_id = job_id
@@ -27,13 +27,9 @@ class GmsecProduct:
         gmsec_msg.set_subject(self.PRODUCT_TOPIC)
 
         gmsec_msg.add_field(lp.F32Field("CONTENT-VERSION", 2024))
-        
-        if "collection" in self.job_id:
-            gmsec_msg.add_field(lp.StringField("PROD-NAME", self.job_id))
-            gmsec_msg.add_field(lp.StringField("JOB-ID", self.collection))
-        else:
-            gmsec_msg.add_field(lp.StringField("PROD-NAME", self.collection))
-            gmsec_msg.add_field(lp.StringField("JOB-ID", self.job_id))
+
+        gmsec_msg.add_field(lp.StringField("PROD-NAME", self.concept_id))
+        gmsec_msg.add_field(lp.StringField("JOB-ID", self.job_id))
             
         if self.ogc:
             gmsec_msg.add_field(lp.StringField("PROD-DESCRIPTION", self.ogc))

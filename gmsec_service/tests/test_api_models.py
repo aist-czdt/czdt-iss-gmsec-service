@@ -29,32 +29,31 @@ def test_log_request_invalid_level():
 def test_product_request_valid():
     product = ProductRequest(
         job_id="1234-abcd",
-        collection="collection-abc",
+        concept_id="collection-abc",
         provenance="source:dummy,parameter:dummy",
         ogc="ogc-id",
-        uris=["s3://bucket/file1.txt", "s3://another-bucket/data/file2.csv"],
+        uris=["s3://bucket/file1.txt", "https://another-bucket/data/file2.csv"],
     )
     assert product.job_id == "1234-abcd"
-    assert product.collection == "collection-abc"
+    assert product.concept_id == "collection-abc"
     assert product.provenance == "source:dummy,parameter:dummy"
-    assert product.uris[0].startswith("s3://")
-
+    assert len(product.uris) > 0
 
 def test_product_request_invalid_uri_scheme():
     with pytest.raises(ValidationError) as exc_info:
         ProductRequest(
-            collection="collection-x", ogc="ogc-y", uris=["http://example.com/file.txt"]
+            job_id="1234-abcd", concept_id="collection-x", ogc="ogc-y", uris=[]
         )
-    assert "Invalid URI" in str(exc_info.value)
+    assert "list must not be empty" in str(exc_info.value)
 
 
 def test_product_request_empty_uris():
     with pytest.raises(ValidationError) as exc_info:
-        ProductRequest(collection="abc", ogc="def", uris=[])
+        ProductRequest(job_id="1234-abcd", concept_id="abc", ogc="def", uris=[])
     assert "uris list must not be empty" in str(exc_info.value)
 
 
 def test_product_request_blank_collection():
     with pytest.raises(ValidationError) as exc_info:
-        ProductRequest(collection="  ", ogc="ogc-123", uris=["s3://bucket/file"])
+        ProductRequest(job_id="1234-abcd", concept_id="  ", ogc="ogc-123", uris=["s3://bucket/file"])
     assert "at least 1 character" in str(exc_info.value)

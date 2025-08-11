@@ -30,18 +30,15 @@ class LogRequest(BaseModel):
 
 class ProductRequest(BaseModel):
     job_id: NonEmptyStr
-    collection: NonEmptyStr
+    concept_id: NonEmptyStr
     provenance: NonEmptyStr = Field(default="default", description="Data provenance string")
     ogc: Optional[str] = Field(default=None, description="OGC path (string or list; normalized to single string or None)")
     uris: List[NonEmptyStr]
 
     @field_validator("uris")
-    def validate_s3_uris(cls, v: List[str]) -> List[str]:
+    def validate_uris(cls, v: List[str]) -> List[str]:
         if not v:
             raise ValueError("uris list must not be empty")
-        for uri in v:
-            if not uri.startswith("s3://"):
-                raise ValueError(f"Invalid URI: '{uri}'. Must start with 's3://'")
         return v
 
     @model_validator(mode="before")
@@ -88,7 +85,7 @@ def get_gmsec_connection() -> GmsecConnection:
 def publish_product(product: ProductRequest, gmsec: GmsecConnection = Depends(get_gmsec_connection)):
     logger.info(f"Received /product request: {product.json()}")
     gmsec_product = GmsecProduct(
-        product.job_id, product.collection, product.provenance, product.ogc, product.uris, gmsec
+        product.job_id, product.concept_id, product.provenance, product.ogc, product.uris, gmsec
     )
     publish_status = gmsec_product.publish_product()
     return {"status": publish_status}
