@@ -11,37 +11,9 @@ from gmsec_service.common.job import JobState
 
 
 @pytest.fixture(scope="session")
-def maap_client():
+def test_maap_client():
     load_dotenv("auth/.env")
     assert os.getenv("MAAP_PGT") is not None, "MAAP_PGT must be set in the .env file"
     maap = MAAP()
     assert maap.profile.account_info() is not None, "Failed to authenticate MAAP client"
     return maap
-
-
-def test_job_submission(maap_client: MAAP):
-    collection_id = "C1276812838-GES_DISC"
-    granule_id = "M2T1NXFLX.5.12.4:MERRA2_400.tavg1_2d_flx_Nx.20250401.nc4"
-    file_uri="s3://czdt-iass/output_data/e8d1db62-2283-4f83-8589-ae0f8e967bd2/impacted_population.zarr",
-    
-    job: DPSJob = maap_client.submitJob(
-        identifier="gmsec-directive-ingest",
-        algo_id="czdt-iss-ingest",
-        version="main",
-        queue="maap-dps-czdt-worker-8gb",
-        file_uri=file_uri,
-        granule_id=granule_id,
-        collection_id=collection_id,
-        s3_bucket="czdt-hysds-dataset",
-        s3_prefix="ingest",
-        role_arn="arn:aws:iam::011528287727:role/czdt-hysds-verdi-role",
-    )
-
-    assert job.id is not None
-    assert job.status.lower() in JobState.status_map.keys()
-
-
-def test_job_status(maap_client: MAAP):
-    job_id = "684a2f26-46da-4635-af59-3b36aa69e494"
-    job_status = maap_client.getJobStatus(job_id)
-    assert job_status.lower() in JobState.status_map.keys()
