@@ -1,6 +1,6 @@
 import logging
 
-from typing import List, Optional, Annotated, Union
+from typing import List, Optional, Annotated
 from fastapi import FastAPI, Depends
 from contextlib import asynccontextmanager
 
@@ -9,6 +9,11 @@ from pydantic import BaseModel, StringConstraints, model_validator, field_valida
 from gmsec_service.services.publisher import GmsecProduct, GmsecLog
 from gmsec_service.common.connection import GmsecConnection
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
 logger = logging.getLogger("publisher_api")
 
 gmsec_connection: Optional[GmsecConnection] = None
@@ -37,8 +42,10 @@ class ProductRequest(BaseModel):
 
     @field_validator("uris")
     def validate_uris(cls, v: List[str]) -> List[str]:
-        if not v:
-            raise ValueError("uris list must not be empty")
+        for uri in v:
+            if not uri.strip():
+                logger.error("Invalid URI in request: uris cannot contain empty strings")
+                raise ValueError("uris cannot contain empty strings")
         return v
 
     @model_validator(mode="before")
@@ -53,14 +60,14 @@ class ProductRequest(BaseModel):
         if isinstance(raw_ogc, list):
             # Accept empty list → normalize to empty string
             if not raw_ogc:
-                data["ogc"] = ""
+                data["ogc"] = None
                 return data
             raw_ogc = raw_ogc[0]
 
         if isinstance(raw_ogc, str):
             data["ogc"] = raw_ogc.strip()
             return data
-
+        logger.error("Invalid OGC in request: must be a string, list of strings, or omitted")
         raise ValueError("ogc must be a string, list of strings, or omitted")
 
 @asynccontextmanager
@@ -77,6 +84,7 @@ app = FastAPI(lifespan=lifespan)
 
 def get_gmsec_connection() -> GmsecConnection:
     if not gmsec_connection:
+        logger.error("GMSEC connection is not initialized")
         raise RuntimeError("GMSEC connection is not initialized")
     return gmsec_connection
 
