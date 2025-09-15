@@ -57,3 +57,17 @@ def test_product_request_blank_collection():
     with pytest.raises(ValidationError) as exc_info:
         ProductRequest(job_id="1234-abcd", concept_id="  ", ogc="ogc-123", uris=["s3://bucket/file"])
     assert "at least 1 character" in str(exc_info.value)
+
+def test_empty_list_ogc():
+    product = ProductRequest(
+        job_id="1234-abcd",
+        concept_id="collection-abc",
+        provenance="source:dummy,parameter:dummy",
+        ogc=[],
+        uris=["s3://bucket/file1.txt", "https://another-bucket/data/file2.csv"],
+    )
+    assert product.job_id == "1234-abcd"
+    assert product.concept_id == "collection-abc"
+    assert product.provenance == "source:dummy,parameter:dummy"
+    assert len(product.uris) > 0
+    assert product.ogc is None
