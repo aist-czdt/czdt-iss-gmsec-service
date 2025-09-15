@@ -124,11 +124,11 @@ class GmsecRequestHandler:
         if "LIS" in product_path:
             if ingest_variables:
                 ingest_variables = ["SoilMoist_tavg_0" if v == "SoilMoist_tavg" else v for v in ingest_variables]
-            job_args = {**default_args, **self.config["variants"]["lis"]}
+            job_args = {**default_args, **config["variants"]["lis"]}
         elif "gpkg" in product_path:
-            job_args = {**default_args, **self.config["variants"]["gpkg"]}
+            job_args = {**default_args, **config["variants"]["gpkg"]}
         else:
-            job_args = {**default_args, **self.config["variants"]["base"]}
+            job_args = {**default_args, **config["variants"]["base"]}
         
         if ingest_variables:
             job_args["variables"] = ",".join(ingest_variables)
