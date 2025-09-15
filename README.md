@@ -75,9 +75,11 @@ Used for authentication to the CZDT messagebus. See `auth/truststore.example.pem
 #### `.env` 
 Contains MAAP API token. See `auth/example.env`.
 
-### Config file
+### Config files
 #### `config/config-prod.xml`
 Needs `server` and various heartbeat URLs filled in. See `config/config-prod.example.xml`
+#### `gmsec_service/handlers/ingest_config.yaml`
+Needs URLs and parameters filled in. See `gmsec_service/handlers/ingest_config.example.yaml`
 
 ```bash
 docker compose up --build

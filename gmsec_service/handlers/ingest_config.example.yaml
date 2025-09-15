@@ -1,0 +1,33 @@
+defaults:
+  queue: queue-name
+  s3_bucket: bucket-name
+  s3_prefix: prefix-name
+  role_arn: role-arn
+  cmss_logger_host: cmss-ip
+  mmgis_host: mmgis-ip
+  titiler_token_secret_name: titiler-token
+  local_download_path: output
+  geoserver_host: geoserver-ip
+  maap_host: maap-host
+
+variants:
+  lis:
+    identifier: LIS_DAILY_WORKFLOW
+    algo_id: lis-algo-id
+    version: lis-ingest
+    zarr_config_url: /path/to/zarr/config
+    steps: all
+    time_coord: time
+    lat_coord: north_south
+    lon_coord: east_west
+  gpkg:
+    identifier: gmsec-gpkg-ingest
+    algo_id: gpkg-algo-id
+    version: gpkg-ingest
+    zarr_config_url: /path/to/zarr/config
+    variables: "*"
+  base:
+    identifier: gmsec_ingest
+    algo_id: base-algo-id
+    version: base-ingest
+    zarr_config_url: /path/to/zarr/config
