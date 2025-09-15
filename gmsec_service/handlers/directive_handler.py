@@ -1,5 +1,7 @@
 import json
 import os
+
+import yaml
 import libgmsec_python3 as lp
 from time import sleep
 from typing import Optional
@@ -29,7 +31,9 @@ def authenticate_maap(max_retries=5, base_delay=1.0, backoff_factor=2.0):
             lp.log_info(f"[Retry {attempt}/{max_retries}] Authentication failed: {e}. Retrying in {delay:.1f}s...")
             sleep(delay)
 
+
 maap = authenticate_maap()
+
 
 class GmsecRequestHandler:
     """
@@ -42,10 +46,8 @@ class GmsecRequestHandler:
         try:
             self.directive_string_data: dict = json.loads(directive_string)
         except (json.JSONDecodeError, TypeError) as e:
-            raise ValueError(
-                "Unable to decode DIRECTIVE-STRING: not valid JSON."
-            ) from e
-            
+            raise ValueError("Unable to decode DIRECTIVE-STRING: not valid JSON.") from e
+
     def get_job_id(self) -> str:
         """ """
         job_id = self.directive_string_data.get("job-id", "N/A")
@@ -76,7 +78,7 @@ class GmsecRequestHandler:
             if maap_job_status and maap_job_status.lower() != "deleted":
                 break
 
-            lp.log_warning(f"Attempt {attempt + 1}: Job {job_id} returned 'deleted'. Retrying after {2 ** attempt}s...")
+            lp.log_warning(f"Attempt {attempt + 1}: Job {job_id} returned 'deleted'. Retrying after {2**attempt}s...")
             sleep(2**attempt)
 
         else:
@@ -86,13 +88,13 @@ class GmsecRequestHandler:
 
         lp.log_info(f"Obtained job status '{maap_job_status}' for job {job_id}")
         return JobState.from_maap_status(maap_job_status, job_id)
-    
+
     def get_ingest_concept_id(self) -> str:
         concept_id = self.directive_string_data.get("concept_id")
         if not concept_id:
             raise ValueError("Unable to extract 'concept_id' from DIRECTIVE-STRING.")
         return concept_id
-    
+
     def get_ingest_product_path(self) -> str:
         product_path = self.directive_string_data.get("products")
         if not product_path:
@@ -100,8 +102,8 @@ class GmsecRequestHandler:
         if len(product_path) > 1:
             raise ValueError(f"Expected 1 product path exctracted from DIRECTIVE-STRING, found {len(product_path)}")
         return product_path[0]
-    
-    def get_ingest_product_type(self) ->str:
+
+    def get_ingest_product_type(self) -> str:
         product_format = self.directive_string_data.get("format")
         if not product_format:
             raise ValueError("Unable to extract 'format' from DIRECTIVE-STRING.")
@@ -110,6 +112,28 @@ class GmsecRequestHandler:
     def get_ingest_variables(self) -> Optional[str]:
         product_variables = self.directive_string_data.get("essential_variables")
         return product_variables
+    
+    def set_ingest_args(self, concept_id: str, product_path: str, ingest_variables: Optional[list[str]]) -> dict[str, str]:
+        with open("gmsec_service/handlers/ingest_config.yaml") as f:
+            config = yaml.safe_load(f)
+            
+        default_args = {**config["defaults"],
+                        "input_s3": product_path,
+                        "collection_id": concept_id}
+        
+        if "LIS" in product_path:
+            if ingest_variables:
+                ingest_variables = ["SoilMoist_tavg_0" if v == "SoilMoist_tavg" else v for v in ingest_variables]
+            job_args = {**default_args, **self.config["variants"]["lis"]}
+        elif "gpkg" in product_path:
+            job_args = {**default_args, **self.config["variants"]["gpkg"]}
+        else:
+            job_args = {**default_args, **self.config["variants"]["base"]}
+        
+        if ingest_variables:
+            job_args["variables"] = ",".join(ingest_variables)
+        
+        return job_args
 
     def trigger_ingest(self) -> JobState:
         """
@@ -120,65 +144,18 @@ class GmsecRequestHandler:
         product_path = self.get_ingest_product_path()
         product_type = self.get_ingest_product_type()
         ingest_variables = self.get_ingest_variables()
-        
-        # gpkg currently not supported
-        if product_type == "gpkg":
-            lp.log_error(f"Unable to submit gpkg job")
-            return JobState.from_maap_status("failed", "N/A")
-        
-        # Trigger ingest NOAA FTP
-        if any(
-            "noaa" in item.lower()
-            for v in self.directive_string_data.values()
-            if isinstance(v, str) or isinstance(v, list)
-            for item in (v if isinstance(v, list) else [v])
-        ):
-            job_args = {
-                "identifier": "ftp-ingest-021",
-                "algo_id": "czdt-ftp-ingest",
-                "version": "auto-create-collection",
-                "queue": "maap-dps-czdt-worker-8gb",
-                "ftp_server": "floodlight.ssec.wisc.edu",
-                "area_of_interest": "021", # Chesapeake Bay area
-                's3_bucket': "czdt-hysds-dataset",
-                "s3_prefix": "ingest",
-                "role_arn": "arn:aws:iam::011528287727:role/czdt-hysds-verdi-role",
-                "cmss_logger_host": "http://44.242.188.25:8000",
-                "mmgis_host": "http://35.86.216.193:8888",
-                "titiler_token_secret_name": "czdt_titiler_token",
-                "overwrite_existing": "false"
-            }
-            
-        # Trigger normal product ingest
-        else:
-            job_args = {
-                "identifier": "gmsec_ingest",
-                "algo_id": "czdt-iss-product-ingest",
-                "version": "auto-create-collection",
-                "queue": "maap-dps-czdt-worker-8gb",
-                "input_s3": product_path,
-                "collection_id": concept_id,
-                "s3_bucket": "czdt-hysds-dataset",
-                "s3_prefix": "ingest",
-                "role_arn": "arn:aws:iam::011528287727:role/czdt-hysds-verdi-role",
-                "cmss_logger_host": "http://44.242.188.25:8000",
-                "mmgis_host": "http://35.86.216.193:8888",
-                "titiler_token_secret_name": "czdt_titiler_token",
-                "job_queue": "maap-dps-czdt-worker-8gb",
-                "zarr_config_url": "s3://maap-ops-workspace/rileykk/sample_lis_cfg.yaml",
-                "maap_host": "api.maap-project.org"
-            }
-        
-            if ingest_variables:
-                job_args["variables"] = ",".join(ingest_variables)
-        
+
+        if None in [concept_id, product_path, product_type]:
+            raise ValueError("Missing required argument for ingest")
+
+        job_args = self.set_ingest_args(concept_id, product_path, ingest_variables)
+
         try:
             job: DPSJob = maap.submitJob(**job_args)
         except Exception as e:
             lp.log_error(f"Unable to submit job {e}")
-            return JobState.from_maap_status("failed", "N/A") 
-        
+            return JobState.from_maap_status("failed", "N/A")
+
         if job.status == "success":
             return JobState.from_maap_status("accepted", job.id)
         return JobState.from_maap_status(job.status, job.id)
-
