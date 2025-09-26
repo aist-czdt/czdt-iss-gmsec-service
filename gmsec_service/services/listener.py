@@ -1,27 +1,42 @@
+import sys
 import json
 import logging
 import time
+import html
 import libgmsec_python3 as lp
 from gmsec_service.common.connection import GmsecConnection
 from gmsec_service.common.job import JobState
-from gmsec_service.handlers.directive_handler import GmsecJobStatus, GmsecSubmitJob
-from gmsec_service.services.publisher import GmsecLog, GmsecProduct
+from gmsec_service.handlers.directive_handler import GmsecRequestHandler
+from gmsec_service.services.publisher import GmsecLog
 
 
 class GmsecListener:
     def __init__(self, env: str = "PROD"):
         if env == "PROD":
-            config = "config/config-prod.xml"
+            self.config = "config/config-prod.xml"
         elif env == "DEV":
-            config = "config/config-dev.xml"
+            self.config = "config/config-dev.xml"
+        else:
+            raise ValueError(f"Unknown environment: {env}")
 
         self.subscription_name = "CMSS-REQUESTS-SUBSCRIPTION"
 
-        self.gmsec = GmsecConnection(config)
+        self.gmsec = None
+        self.subscription_pattern = None
+        
+        self.initialize_connection()
 
-        self.subscription_pattern = self.gmsec.get_subscription_pattern(
-            self.subscription_name
-        )
+    def initialize_connection(self):
+        if self.gmsec:
+            try:
+                self.gmsec.teardown()
+            except Exception as e:
+                lp.log_warning(f"Error during teardown: {e}")
+
+        self.gmsec = GmsecConnection(self.config)
+        self.subscription_pattern = self.gmsec.get_subscription_pattern(self.subscription_name)
+        self.gmsec.conn.subscribe(self.subscription_pattern)
+        lp.log_info("GMSEC connection initialized and subscription set.")
 
     def handle_request(self, request_msg: lp.Message):
         try:
@@ -34,27 +49,19 @@ class GmsecListener:
                     raise ValueError(f"Missing required field {field}")
 
             directive_keyword = request_msg.get_string_value("DIRECTIVE-KEYWORD")
-            directive_string = request_msg.get_string_value("DIRECTIVE-STRING")
+            raw_directive_string = request_msg.get_string_value("DIRECTIVE-STRING")
+            directive_string = html.unescape(raw_directive_string)
+
+            request_handler = GmsecRequestHandler(directive_keyword, directive_string)
 
             if directive_keyword == "JOB-STATUS":
-                request_handler = GmsecJobStatus(directive_keyword, directive_string)
                 try:
                     job_id = request_handler.get_job_id()
                     job_status = request_handler.get_job_status(job_id)
-
-                    if job_status.status_label.lower() == "COMPLETED":
-                        # Emit PROD message
-                        collection = "iass_impacted_population"
-                        ogc = "http://35.86.216.193:8888/stac/collections/iass_impacted_population/items"
-                        uris = [""]
-                        gmsec_product = GmsecProduct(collection, ogc, uris, self.gmsec)
-                        publish_status = gmsec_product.publish_product()
-                        lp.log_info()
                 except Exception as e:
                     logging.exception(e)
 
             elif directive_keyword == "SUBMIT-JOB":
-                request_handler = GmsecSubmitJob(directive_keyword, directive_string)
                 try:
                     job_status = request_handler.trigger_ingest()
                 except Exception as e:
@@ -62,15 +69,19 @@ class GmsecListener:
 
             else:
                 raise ValueError(f"Unsupported DIRECTIVE-KEYWORD: {directive_keyword}")
+            
+            # Ensure job is not a transient job failure before sending response
+            if job_status.status_label == "FAILED":
+                lp.log_info(f"Job {job_status.job_id} has FAILED status. Ensuring failure isn't transient before replying...")
+                time.sleep(2)
+                job_status = request_handler.get_job_status(job_status.job_id)
 
-            lp.log_info(
-                f"Constructing Reply: job_id {job_status.job_id} job_status {job_status.status_label}"
-            )
+            lp.log_info(f"Constructing Reply: job_id {job_status.job_id} job_status {job_status.status_label}")
 
             # Construct a response
-            response_msg = self.build_response(
-                job_status, request_msg.get_field("REQUEST-ID")
-            )
+            response_msg = self.build_response(job_status, request_msg.get_field("REQUEST-ID"))
+            if request_msg.has_field("COMPONENT"):
+                response_msg.add_field(lp.StringField("DESTINATION-COMPONENT", request_msg.get_string_value("COMPONENT"),True))
 
             lp.log_info("Sending Response:\n" + response_msg.to_xml())
 
@@ -81,9 +92,7 @@ class GmsecListener:
         finally:
             lp.Message.destroy(request_msg)
 
-    def build_response(
-        self, job_status: JobState, request_id_field: lp.Field
-    ) -> lp.Message:
+    def build_response(self, job_status: JobState, request_id_field: lp.Field) -> lp.Message:
         """
         Builds response message from JobState object along with request message's id Field object
         """
@@ -96,45 +105,54 @@ class GmsecListener:
         response_msg.add_field(request_id_field)
         response_msg.add_field(lp.I16Field("RESPONSE-STATUS", job_status.status_code))
         response_msg.add_field(lp.StringField("DATA-STRING", json.dumps(response_data)))
-        response_msg.add_field(
-            lp.StringField("DESTINATION-COMPONENT", "PRODUCT-MONITOR", True)
-        )
         return response_msg
 
     def run(self):
-        try:
-            log_msg = (
-                "GMSEC listener initialized. Waiting to receive directive requests."
-            )
-            log_publisher = GmsecLog("INFO", log_msg, self.gmsec)
-            log_publisher.publish_log()
+        log_msg = "GMSEC listener initialized. Waiting to receive directive requests."
+        log_publisher = GmsecLog("INFO", log_msg, self.gmsec)
+        log_publisher.publish_log()
 
-            timeout = lp.GMSEC_WAIT_FOREVER
+        timeout = 5000  # 5 seconds
 
-            # Set up subscription
-            self.gmsec.conn.subscribe(self.subscription_pattern)
+        while True:
+            try:
+                request_msg = self.gmsec.conn.receive(timeout)
 
-            # Wait for message to come in
-            while True:
-                try:
-                    request_msg: lp.Message = self.gmsec.conn.receive(timeout)
+                if request_msg is not None:
+                    self.handle_request(request_msg)
 
-                    if request_msg is not None:
-                        self.handle_request(request_msg)
+                time.sleep(0.5)
 
-                    time.sleep(1)
-                except KeyboardInterrupt:
-                    print("\nCtrl+C was pressed. Exiting...")
-                    break
+            except lp.GmsecError as e:
+                lp.log_error(f"GMSEC error: {e}")
+                log_publisher = GmsecLog("ERROR", f"GMSEC connection error: {e}", self.gmsec)
+                log_publisher.publish_log()
 
-        except lp.GmsecError as e:
-            lp.log_error("Exception: " + str(e))
-            log_msg = "Error in GMSEC listener. Please check status."
-            log_publisher = GmsecLog("ERROR", log_msg, self.gmsec)
-            log_publisher.publish_log()
-        finally:
-            # Tear down GMSEC
-            self.gmsec.teardown()
+                # Attempt to reconnect
+                success = False
+                retries = 0
+                max_retries = 10
+                
+                while not success and retries < max_retries:
+                    try:
+                        lp.log_info("Attempting GMSEC reconnection...")
+                        self.initialize_connection()
+                        success = True
+                        lp.log_info("GMSEC reconnection successful.")
+                    except Exception as retry_error:
+                        retries += 1
+                        lp.log_error(f"Reconnect failed: {retry_error}")
+                        time.sleep(5)
+                        
+                if not success:
+                    lp.log_error("Max reconnect attempts reached. Exiting container.")
+                    sys.exit(1)  # Let Docker Compose restart us
+
+            except KeyboardInterrupt:
+                print("\nCtrl+C was pressed. Exiting...")
+                break
+
+        self.gmsec.teardown()
 
 
 if __name__ == "__main__":

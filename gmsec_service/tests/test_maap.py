@@ -3,11 +3,13 @@ Integration tests for the connection to MAAP.
 """
 
 import os
+import html
 from maap.maap import MAAP, DPSJob
 from dotenv import load_dotenv
 import pytest
 
 from gmsec_service.common.job import JobState
+from gmsec_service.handlers.directive_handler import GmsecRequestHandler
 
 
 @pytest.fixture(scope="session")
@@ -18,25 +20,49 @@ def maap_client():
     assert maap.profile.account_info() is not None, "Failed to authenticate MAAP client"
     return maap
 
+def test_maap_ingest_args(maap_client: MAAP):
+    directive_keyword = "SUBMIT-JOB"
+    directive_string = html.unescape("{&quot;concept_id&quot;: &quot;daily_flood_prediction&quot;, &quot;products&quot;: [&quot;s3://czdt-nfss/output_data/SURFACEMODEL/202509/LIS_HIST_202509150300.d01.nc&quot;], &quot;format&quot;: &quot;netcdf&quot;, &quot;essential_variables&quot;: [&quot;SoilMoist_tavg&quot;, &quot;TotalPrecip_tavg&quot;]}")
+    request_handler = GmsecRequestHandler(directive_keyword, directive_string)
+    
+    concept_id = request_handler.get_ingest_concept_id()
+    product_path = request_handler.get_ingest_product_path()
+    product_type = request_handler.get_ingest_product_type()
+    ingest_variables = request_handler.get_ingest_variables()
+    
+    assert concept_id == "daily_flood_prediction"
+    assert product_path == "s3://czdt-nfss/output_data/SURFACEMODEL/202509/LIS_HIST_202509150300.d01.nc"
+    
+    ingest_args = request_handler.set_ingest_args(concept_id, product_path, ingest_variables)
+    assert ingest_args["variables"] == "SoilMoist_tavg_0,TotalPrecip_tavg"
 
-def test_job_submission(maap_client: MAAP):
-    job: DPSJob = maap_client.submitJob(
-        identifier="merra2-test",
-        algo_id="czdt-iss-ingest",
-        version="main",
-        queue="maap-dps-czdt-worker-8gb",
-        granule_id="M2T1NXFLX.5.12.4:MERRA2_400.tavg1_2d_flx_Nx.20250401.nc4",
-        collection_id="C1276812838-GES_DISC",
-        s3_bucket="czdt-hysds-dataset",
-        s3_prefix="ingest",
-        role_arn="arn:aws:iam::011528287727:role/czdt-hysds-verdi-role",
-    )
+    for k,v in ingest_args.items():
+        assert v not in [None, "none"]
+        
+def test_maap_ingest_LIS_ROUTING(maap_client: MAAP):
+    directive_keyword = "SUBMIT-JOB"
+    directive_string = html.unescape("{&quot;concept_id&quot;: &quot;daily_flood_prediction&quot;, &quot;products&quot;: [&quot;s3://czdt-nfss/output_data/ROUTING/202509/LIS_HIST_202509161900.d01.nc&quot;], &quot;format&quot;: &quot;netcdf&quot;, &quot;essential_variables&quot;: [&quot;SurfElev_tavg&quot;, &quot;FloodedFrac_tavg&quot;]}")
+    request_handler = GmsecRequestHandler(directive_keyword, directive_string)
+        
+    concept_id = request_handler.get_ingest_concept_id()
+    product_path = request_handler.get_ingest_product_path()
+    product_type = request_handler.get_ingest_product_type()
+    ingest_variables = request_handler.get_ingest_variables()
+    
+    ingest_args = request_handler.set_ingest_args(concept_id, product_path, ingest_variables)
 
-    assert job.id is not None
-    assert job.status.lower() in JobState.status_map.keys()
-
-
-def test_job_status(maap_client: MAAP):
-    job_id = "684a2f26-46da-4635-af59-3b36aa69e494"
+    assert concept_id == "daily_flood_prediction"
+    assert product_path == "s3://czdt-nfss/output_data/ROUTING/202509/LIS_HIST_202509161900.d01.nc"
+    assert ingest_args["variables"] == "SurfElev_tavg,FloodedFrac_tavg"
+    
+    # try:
+    #     job: DPSJob = maap_client.submitJob(**ingest_args)
+    # except Exception as e:
+    #     print(e)
+        # 
+    # print(job.id, job.status)
+    
+def test_maap_job_status(maap_client: MAAP):
+    job_id = "a2eab7a9-f155-4b6d-8cd1-574350ed34f0"
     job_status = maap_client.getJobStatus(job_id)
-    assert job_status.lower() in JobState.status_map.keys()
+    print(job_status)

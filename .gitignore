@@ -8,3 +8,7 @@ __pycache__
 .env
 truststore.pem
 config-prod.xml
+
+activemq-cpp-3.9.5.tar.gz
+
+ingest_config.yaml

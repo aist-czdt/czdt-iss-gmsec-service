@@ -14,7 +14,7 @@ class JobState:
     status_map = {
         "accepted": "SUBMITTED",
         "running": "IN_PROGRESS",
-        "success": "COMPLETED",
+        "succeeded": "COMPLETED",
         "failed": "FAILED",
         "job-revoked": "FAILED",
     }

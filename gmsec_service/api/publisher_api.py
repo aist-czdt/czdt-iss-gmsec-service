@@ -1,12 +1,20 @@
+import logging
+
 from typing import List, Optional, Annotated
 from fastapi import FastAPI, Depends
 from contextlib import asynccontextmanager
 
-from pydantic import BaseModel, StringConstraints, field_validator
+from pydantic import BaseModel, StringConstraints, model_validator, field_validator, Field
 
 from gmsec_service.services.publisher import GmsecProduct, GmsecLog
 from gmsec_service.common.connection import GmsecConnection
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger("publisher_api")
 
 gmsec_connection: Optional[GmsecConnection] = None
 
@@ -21,26 +29,46 @@ class LogRequest(BaseModel):
     def validate_level(cls, v: str) -> str:
         allowed_levels = GmsecLog.LEVEL_SEVERITY_MAP.keys()
         if v.upper() not in allowed_levels:
-            raise ValueError(
-                f"Invalid log level '{v}'. Must be one of: {', '.join(allowed_levels)}"
-            )
+            raise ValueError(f"Invalid log level '{v}'. Must be one of: {', '.join(allowed_levels)}")
         return v.upper()
 
 
 class ProductRequest(BaseModel):
-    collection: NonEmptyStr
-    ogc: NonEmptyStr
+    job_id: NonEmptyStr
+    concept_id: NonEmptyStr
+    provenance: NonEmptyStr = Field(default="default", description="Data provenance string")
+    ogc: Optional[str] = Field(default=None, description="OGC path (string or list; normalized to single string or None)")
     uris: List[NonEmptyStr]
 
     @field_validator("uris")
-    def validate_s3_uris(cls, v: List[str]) -> List[str]:
-        if not v:
-            raise ValueError("uris list must not be empty")
+    def validate_uris(cls, v: List[str]) -> List[str]:
         for uri in v:
-            if not uri.startswith("s3://"):
-                raise ValueError(f"Invalid URI: '{uri}'. Must start with 's3://'")
+            if not uri.strip():
+                logger.error("Invalid URI in request: uris cannot contain empty strings")
+                raise ValueError("uris cannot contain empty strings")
         return v
 
+    @model_validator(mode="before")
+    @classmethod
+    def normalize_ogc(cls, data):
+        raw_ogc = data.get("ogc", None)
+
+        # Accept None or empty string; normalize to empty string if list or whitespace
+        if raw_ogc is None:
+            return data  # Leave ogc as None
+
+        if isinstance(raw_ogc, list):
+            # Accept empty list → normalize to empty string
+            if not raw_ogc:
+                data["ogc"] = None
+                return data
+            raw_ogc = ",".join(raw_ogc)
+
+        if isinstance(raw_ogc, str):
+            data["ogc"] = raw_ogc.strip()
+            return data
+        logger.error("Invalid OGC in request: must be a string, list of strings, or omitted")
+        raise ValueError("ogc must be a string, list of strings, or omitted")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -56,23 +84,24 @@ app = FastAPI(lifespan=lifespan)
 
 def get_gmsec_connection() -> GmsecConnection:
     if not gmsec_connection:
+        logger.error("GMSEC connection is not initialized")
         raise RuntimeError("GMSEC connection is not initialized")
     return gmsec_connection
 
 
 @app.post("/product")
-def publish_product(
-    product: ProductRequest, gmsec: GmsecConnection = Depends(get_gmsec_connection)
-):
-    gmsec_product = GmsecProduct(product.collection, product.ogc, product.uris, gmsec)
+def publish_product(product: ProductRequest, gmsec: GmsecConnection = Depends(get_gmsec_connection)):
+    logger.info(f"Received /product request: {product.json()}")
+    gmsec_product = GmsecProduct(
+        product.job_id, product.concept_id, product.provenance, product.ogc, product.uris, gmsec
+    )
     publish_status = gmsec_product.publish_product()
     return {"status": publish_status}
 
 
 @app.post("/log")
-def log_message(
-    log: LogRequest, gmsec: GmsecConnection = Depends(get_gmsec_connection)
-):
+def log_message(log: LogRequest, gmsec: GmsecConnection = Depends(get_gmsec_connection)):
+    logger.info(f"Received /log request: {log.json()}")
     gmsec_log = GmsecLog(log.level, log.msg_body, gmsec)
     publish_status = gmsec_log.publish_log()
     return {"status": publish_status}

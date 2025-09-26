@@ -79,9 +79,9 @@ def test_publish_product_success(
     """Test successful product publish request."""
 
     product_data = {
-        "collection": "example_collection",
+        "concept_id": "example_collection",
         "ogc": "example_ogc",
-        "uris": ["s3://example-bucket/file1.p", "s3://example-bucket/file2.p"],
+        "uris": ["s3://example-bucket/file1.p", "https://example-bucket/file2.p"],
     }
 
     mock_response = mock_httpx_async_client.post.return_value
