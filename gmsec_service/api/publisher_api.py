@@ -62,7 +62,7 @@ class ProductRequest(BaseModel):
             if not raw_ogc:
                 data["ogc"] = None
                 return data
-            raw_ogc = raw_ogc[0]
+            raw_ogc = ",".join(raw_ogc)
 
         if isinstance(raw_ogc, str):
             data["ogc"] = raw_ogc.strip()
