@@ -10,6 +10,13 @@ from gmsec_service.handlers.directive_handler import GmsecRequestHandler
 from gmsec_service.services.publisher import GmsecLog
 
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] [%(name)s] %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S"
+)
+
+
 class GmsecListener:
     def __init__(self, env: str = "PROD"):
         if env == "PROD":
@@ -23,25 +30,36 @@ class GmsecListener:
 
         self.gmsec = None
         self.subscription_pattern = None
-        
+
         self.initialize_connection()
+
+    def is_fatal_gmsec_error(self, e: Exception) -> bool:
+        msg = str(e).lower()
+        return "openssl" in msg or "cms" in msg or "ssl" in msg or "connection" in msg
 
     def initialize_connection(self):
         if self.gmsec:
             try:
+                try:
+                    self.gmsec.conn.disconnect()
+                except Exception:
+                    pass
+
                 self.gmsec.teardown()
             except Exception as e:
-                lp.log_warning(f"Error during teardown: {e}")
+                logging.warning("Error during teardown: %s", e)
+            finally:
+                self.gmsec = None
 
         self.gmsec = GmsecConnection(self.config)
         self.subscription_pattern = self.gmsec.get_subscription_pattern(self.subscription_name)
         self.gmsec.conn.subscribe(self.subscription_pattern)
-        lp.log_info("GMSEC connection initialized and subscription set.")
+        logging.info("GMSEC connection initialized and subscription set.")
 
     def handle_request(self, request_msg: lp.Message):
         try:
             # Received a message!
-            lp.log_info("Received Message:\n" + request_msg.to_xml())
+            logging.info("Received Message:\n%s", request_msg.to_xml())
 
             # Ensure required fields
             for field in ("DIRECTIVE-KEYWORD", "DIRECTIVE-STRING"):
@@ -69,21 +87,30 @@ class GmsecListener:
 
             else:
                 raise ValueError(f"Unsupported DIRECTIVE-KEYWORD: {directive_keyword}")
-            
+
             # Ensure job is not a transient job failure before sending response
             if job_status.status_label == "FAILED":
-                lp.log_info(f"Job {job_status.job_id} has FAILED status. Ensuring failure isn't transient before replying...")
+                logging.info(
+                    "Job %s has FAILED status. Ensuring failure isn't transient before replying...",
+                    job_status.job_id
+                )
                 time.sleep(2)
                 job_status = request_handler.get_job_status(job_status.job_id)
 
-            lp.log_info(f"Constructing Reply: job_id {job_status.job_id} job_status {job_status.status_label}")
+            logging.info(
+                "Constructing Reply: job_id=%s job_status=%s",
+                job_status.job_id,
+                job_status.status_label
+            )
 
             # Construct a response
             response_msg = self.build_response(job_status, request_msg.get_field("REQUEST-ID"))
             if request_msg.has_field("COMPONENT"):
-                response_msg.add_field(lp.StringField("DESTINATION-COMPONENT", request_msg.get_string_value("COMPONENT"),True))
+                response_msg.add_field(
+                    lp.StringField("DESTINATION-COMPONENT", request_msg.get_string_value("COMPONENT"), True)
+                )
 
-            lp.log_info("Sending Response:\n" + response_msg.to_xml())
+            logging.info("Sending Response:\n%s", response_msg.to_xml())
 
             self.gmsec.conn.reply(request_msg, response_msg)
 
@@ -109,8 +136,8 @@ class GmsecListener:
 
     def run(self):
         log_msg = "GMSEC listener initialized. Waiting to receive directive requests."
-        log_publisher = GmsecLog("INFO", log_msg, self.gmsec)
-        log_publisher.publish_log()
+        GmsecLog("INFO", log_msg, self.gmsec).publish_log()
+        logging.info(log_msg)
 
         timeout = 5000  # 5 seconds
 
@@ -121,38 +148,44 @@ class GmsecListener:
                 if request_msg is not None:
                     self.handle_request(request_msg)
 
-                time.sleep(0.5)
-
             except lp.GmsecError as e:
-                lp.log_error(f"GMSEC error: {e}")
-                log_publisher = GmsecLog("ERROR", f"GMSEC connection error: {e}", self.gmsec)
-                log_publisher.publish_log()
+                logging.error("GMSEC error: %s", e)
+                GmsecLog("ERROR", f"GMSEC connection error: {e}", self.gmsec).publish_log()
 
-                # Attempt to reconnect
-                success = False
-                retries = 0
-                max_retries = 10
-                
-                while not success and retries < max_retries:
-                    try:
-                        lp.log_info("Attempting GMSEC reconnection...")
-                        self.initialize_connection()
-                        success = True
-                        lp.log_info("GMSEC reconnection successful.")
-                    except Exception as retry_error:
-                        retries += 1
-                        lp.log_error(f"Reconnect failed: {retry_error}")
-                        time.sleep(5)
-                        
-                if not success:
-                    lp.log_error("Max reconnect attempts reached. Exiting container.")
-                    sys.exit(1)  # Let Docker Compose restart us
+                if self.is_fatal_gmsec_error(e):
+                    logging.error("Fatal CMS/OpenSSL error detected. Restarting container.")
+                    sys.exit(1)
+
+                else:
+                    # Attempt to reconnect
+                    success = False
+                    retries = 0
+                    max_retries = 10
+
+                    while not success and retries < max_retries:
+                        try:
+                            logging.info("Attempting GMSEC reconnection...")
+                            self.initialize_connection()
+                            success = True
+                            logging.info("GMSEC reconnection successful.")
+                        except Exception as retry_error:
+                            retries += 1
+                            logging.error(f"Reconnect failed: {retry_error}")
+                            time.sleep(5)
+
+                    if not success:
+                        logging.error("Max reconnect attempts reached. Exiting container.")
+                        sys.exit(1)  # Let Docker Compose restart us
 
             except KeyboardInterrupt:
-                print("\nCtrl+C was pressed. Exiting...")
+                logging.info("Ctrl+C pressed. Exiting.")
                 break
 
-        self.gmsec.teardown()
+        if self.gmsec:
+            try:
+                self.gmsec.teardown()
+            except Exception:
+                pass
 
 
 if __name__ == "__main__":
